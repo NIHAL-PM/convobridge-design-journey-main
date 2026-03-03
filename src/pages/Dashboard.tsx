@@ -8,6 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { PremiumAudioPlayer } from "@/components/PremiumAudioPlayer";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -749,10 +751,6 @@ export default function Dashboard() {
       )}
     </div>
   );
-        </div>
-      )}
-    </div>
-  );
 
   const renderAnalytics = () => (
     <div className="space-y-8 animate-fade-in-up">
@@ -887,125 +885,6 @@ export default function Dashboard() {
               <div className="pt-4 border-t">
                 <p className="text-[10px] text-muted-foreground uppercase font-bold mb-4">Need help?</p>
                 <Button variant="outline" className="w-full text-xs h-9">Contact Support</Button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-                      <span className="text-sm font-semibold">{item.count}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color}`} style={{ width: `${(item.count / (stats?.totalCalls || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-card border rounded-lg p-6">
-              <h3 className="text-h3 font-semibold mb-4">Lead Status Distribution</h3>
-              <div className="space-y-3">
-                {[
-                  { status: 'Converted', leads: leads?.filter(l => l.status === 'converted').length || 0, color: 'bg-green-500' },
-                  { status: 'Qualified', leads: leads?.filter(l => l.status === 'qualified').length || 0, color: 'bg-purple-500' },
-                  { status: 'Contacted', leads: leads?.filter(l => l.status === 'contacted').length || 0, color: 'bg-blue-500' },
-                  { status: 'New', leads: leads?.filter(l => l.status === 'new').length || 0, color: 'bg-yellow-500' },
-                  { status: 'Lost', leads: leads?.filter(l => l.status === 'lost').length || 0, color: 'bg-red-500' }
-                ].map((item) => (
-                  <div key={item.status}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{item.status}</span>
-                      <span className="text-sm font-semibold">{item.leads}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color}`} style={{ width: `${(item.leads / Math.max(leads?.length || 1, 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Agent Performance */}
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="text-h3 font-semibold mb-4">Agent Performance</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted/50 border-b">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Agent</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Total Calls</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Success Rate</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {agents && agents.length > 0 ? (
-                    agents.map((agent: any) => (
-                      <tr key={agent._id} className="hover:bg-muted/50">
-                        <td className="px-4 py-3 text-sm font-medium">{agent.name}</td>
-                        <td className="px-4 py-3 text-sm">{agent.type}</td>
-                        <td className="px-4 py-3 text-sm font-mono">{agent.stats?.totalCalls || 0}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden w-20">
-                              <div className="h-full bg-blue-500" style={{ width: `${(agent.stats?.successRate || 0) * 100}%` }}></div>
-                            </div>
-                            <span className="text-xs font-semibold">{((agent.stats?.successRate || 0) * 100).toFixed(1)}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-                            agent.isActive ? 'bg-green-500/10 text-green-600' : 'bg-gray-500/10 text-gray-600'
-                          }`}>
-                            {agent.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No agents found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recent Trends */}
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="text-h3 font-semibold mb-4">Period Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Conversion Rate</p>
-                <p className="text-2xl font-bold">{leads && leads.length > 0 ? Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100) : 0}%</p>
-                <p className="text-xs text-muted-foreground mt-1">{leads?.filter(l => l.status === 'converted').length || 0} converted from {leads?.length || 0} leads</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Avg Quality Score</p>
-                <p className="text-2xl font-bold">{leads && leads.length > 0 ? (leads.reduce((sum: number, l: any) => sum + (l.score || 0), 0) / leads.length).toFixed(1) : 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">Based on lead scores</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Most Used Source</p>
-                <p className="text-2xl font-bold">
-                  {leads && leads.length > 0 ? (
-                    Object.keys(
-                      leads.reduce((acc: Record<string, number>, l: any) => {
-                        acc[l.source || 'Direct'] = (acc[l.source || 'Direct'] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).reduce((a, b) => (
-                      (leads.reduce((sum: number, l: any) => sum + (l.source === a ? 1 : 0), 0) > 
-                       leads.reduce((sum: number, l: any) => sum + (l.source === b ? 1 : 0), 0)) ? a : b
-                    ))
-                  ) : 'N/A'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">Most common lead source</p>
               </div>
             </div>
           </div>
