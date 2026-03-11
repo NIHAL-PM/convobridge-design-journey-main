@@ -2,34 +2,28 @@
 
 To deploy this application on Vercel, you need to configure the following environment variables in your Vercel project settings:
 
+## ✨ Architecture: Fully Serverless with Supabase
+
+This application uses **Supabase PostgreSQL** with RPC functions for authentication and data management. There is **no separate backend server** - all database operations run directly in Supabase using Row Level Security (RLS) and custom PostgreSQL functions.
+
 ## Required Environment Variables
 
-### Backend (Server-side)
-1. **MONGODB_URI** (Required)
-   - Your MongoDB connection string
-   - Example: `mongodb+srv://username:password@cluster.mongodb.net/convobridge`
-   - Get from: MongoDB Atlas dashboard
+### Supabase (Database & Auth)
+1. **VITE_SUPABASE_URL** (Required)
+   - Your Supabase project URL
+   - Example: `https://xxxxxxxxxxxxx.supabase.co`
+   - Get from: Supabase Dashboard → Settings → API
 
-2. **JWT_SECRET** (Required)
-   - Secret key for JWT token generation
-   - Example: Generate a random 64-character string
-   - Command: `openssl rand -base64 64`
+2. **VITE_SUPABASE_ANON_KEY** (Required)
+   - Your Supabase anonymous/public API key
+   - Example: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+   - Get from: Supabase Dashboard → Settings → API
+   - **Note**: This is safe to expose publicly (RLS protects your data)
 
-3. **NODE_ENV** (Optional)
-   - Set to `production`
-
-4. **FRONTEND_URL** (Optional)
-   - Your production frontend URL
-   - Example: `https://your-domain.vercel.app`
-
-### Frontend (Client-side)
-1. **VITE_GEMINI_API_KEY** (Required for AI features)
+### AI Features
+1. **VITE_GEMINI_API_KEY** (Required for Live Demo Widget)
    - Your Google Gemini API key
-   - Get from: https://makersuite.google.com/app/apikey
-
-2. **VITE_API_BASE_URL** (Auto-configured)
-   - Already set to `/api` in production
-   - No need to manually configure
+   - Get from: https://aistudio.google.com/app/apikey
 
 ## How to Set Environment Variables in Vercel
 
@@ -38,53 +32,82 @@ To deploy this application on Vercel, you need to configure the following enviro
 3. Add each variable with its value
 4. Select the appropriate environments (Production, Preview, Development)
 5. Click **Save**
+6. Redeploy your project for changes to take effect
 
 ## Testing Locally
 
 Create a `.env.local` file in the project root:
 
 ```bash
-# Backend
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/convobridge
-JWT_SECRET=your_jwt_secret_key_change_in_production
-NODE_ENV=development
-PORT=3001
-FRONTEND_URL=http://localhost:5173
+# Supabase Configuration
+VITE_SUPABASE_URL=https://nbnzbvchmwytgrxohobh.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
-# Frontend
-VITE_GEMINI_API_KEY=your_gemini_api_key
-VITE_API_BASE_URL=http://localhost:3001/api
+# Gemini AI (for live demo widget)
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+Then run the development server:
+```bash
+npm run dev
 ```
 
 ## Deployment Checklist
 
-- [ ] Set `MONGODB_URI` in Vercel environment variables
-- [ ] Set `JWT_SECRET` in Vercel environment variables
+- [ ] Set `VITE_SUPABASE_URL` in Vercel environment variables
+- [ ] Set `VITE_SUPABASE_ANON_KEY` in Vercel environment variables
 - [ ] Set `VITE_GEMINI_API_KEY` in Vercel environment variables
-- [ ] Configure MongoDB to allow connections from Vercel IPs (or use 0.0.0.0/0)
+- [ ] Verify Supabase RLS policies are active (see database documentation)
 - [ ] Test authentication flow after deployment
-- [ ] Verify API endpoints are accessible
-- [ ] Check browser console for any CORS errors
+- [ ] Verify login with admin credentials: `admin@convobridge.in` / `admin234@#$`
+- [ ] Test multi-tenant data isolation
+- [ ] Check browser console for errors
 - [ ] Test creating agents, calls, and leads
 
 ## Troubleshooting
 
-### "Failed to load resource: net::ERR_CONNECTION_REFUSED"
-- This means the frontend is trying to connect to localhost
-- Solution: Ensure `VITE_API_BASE_URL=/api` in production build
-- Rebuild and redeploy after setting environment variables
+### "Cross-Origin Request Blocked" or CORS errors
+- **Cause**: This happens when frontend tries to call a non-existent REST API
+- **Solution**: Verify you're using the latest `apiClient.ts` with Supabase RPC functions
+- **Check**: Make sure there are NO references to `http://localhost:3001` in your code
 
-### "MongoDB connection failed"
-- Check if `MONGODB_URI` is correctly set in Vercel
-- Verify MongoDB Atlas allows connections from anywhere (0.0.0.0/0)
-- Check MongoDB username and password are URL-encoded
+### "Missing Supabase environment variables"
+- Check that `.env.local` exists locally with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+- In Vercel, go to Settings → Environment Variables and verify both are set
+- Redeploy after adding environment variables
 
-### "Unauthorized" errors
-- Ensure `JWT_SECRET` is set and consistent across deployments
-- Clear browser localStorage and try logging in again
-- Check if token is being sent in Authorization header
+### Login fails with "Invalid credentials"
+- **Check user exists**: Go to Supabase Dashboard → Table Editor → `app_users`
+- **Verify email**: Make sure email exactly matches (case-sensitive)
+- **Test with admin**: `admin@convobridge.in` / `admin234@#$`
+- **Check RPC function**: Verify `custom_login` function exists in SQL Editor
 
-### API 404 errors
-- Verify the `/api` rewrite rule in vercel.json
-- Check if the serverless function is deployed (api/index.ts)
-- Look at Vercel function logs for errors
+### "Function not found" errors
+- Go to Supabase Dashboard → SQL Editor
+- Run the database setup scripts to create RPC functions:
+  - `custom_login(user_email, user_password)`
+  - `update_user_password(user_id_param, new_password)`
+  - `add_company_balance(company_id_param, amount_param)`
+
+### Data not loading in Dashboard
+- Open browser DevTools → Console to see errors
+- Check Supabase RLS policies: Table must have SELECT policies for authenticated users
+- Verify user has correct `company_id` in `app_users` table
+
+## Architecture Notes
+
+**No Backend Server Required**
+- This application runs entirely in the browser + Supabase
+- No Express/Node.js server is deployed
+- Authentication uses custom PostgreSQL functions in Supabase
+- Row Level Security (RLS) enforces multi-tenant data isolation
+
+**Database Functions (Supabase RPC)**
+- `custom_login`: Validates credentials using pgcrypto bf-crypt
+- `update_user_password`: Securely updates user password
+- `add_company_balance`: Admin function to top up company credits
+
+**Multi-Tenant Security**
+- Each database row has `company_id` foreign key
+- RLS policies filter data automatically based on logged-in user
+- Users can only see data from their own company
