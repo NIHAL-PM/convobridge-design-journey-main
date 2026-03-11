@@ -132,10 +132,13 @@ class APIClient {
   }
 
   async getAgents() {
-    const { data, error } = await supabase
-      .from('agents')
-      .select('*')
-      .eq('company_id', this.currentUser?.company_id);
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+    
+    const { data, error } = await supabase.rpc('get_user_agents', {
+      user_id_param: this.currentUser.id
+    });
     
     if (error) throw error;
     return { agents: data || [] };
@@ -223,12 +226,14 @@ class APIClient {
   }
 
   async getCalls(query?: any) {
-    const supabaseQuery = supabase
-      .from('calls')
-      .select('*')
-      .eq('company_id', this.currentUser?.company_id || 0);
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
     
-    const { data, error } = await supabaseQuery;
+    const { data, error } = await supabase.rpc('get_user_calls', {
+      user_id_param: this.currentUser.id
+    });
+    
     if (error) throw error;
     return { calls: data || [] };
   }
@@ -245,16 +250,19 @@ class APIClient {
   }
 
   async getCallStats() {
-    const { data, error } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('company_id', this.currentUser?.company_id || 0);
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+    
+    const { data, error } = await supabase.rpc('get_user_calls', {
+      user_id_param: this.currentUser.id
+    });
     
     if (error) throw error;
     
     const totalCalls = data?.length || 0;
-    const totalDuration = data?.reduce((sum, call) => sum + (call.duration_sec || 0), 0) || 0;
-    const totalCost = data?.reduce((sum, call) => sum + parseFloat(call.cost || 0), 0) || 0;
+    const totalDuration = data?.reduce((sum: number, call: any) => sum + (call.duration || 0), 0) || 0;
+    const totalCost = 0; // Calculate based on your pricing logic
     
     return {
       stats: {
@@ -277,6 +285,35 @@ class APIClient {
 
   async updateContactStatus(id: string, status: string) {
     return { success: true };
+  }
+
+  // Leads
+  async getLeads() {
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+    
+    const { data, error } = await supabase.rpc('get_leads', {
+      user_id_param: this.currentUser.id
+    });
+    
+    if (error) throw error;
+    return { leads: data || [] };
+  }
+
+  async createLead(leadData: any) {
+    if (!this.currentUser?.company_id) {
+      throw new Error('Not authenticated');
+    }
+    
+    const { data, error } = await supabase
+      .from('leads')
+      .insert([{ ...leadData, company_id: this.currentUser.company_id }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { lead: data };
   }
 
   // Context Management
@@ -315,34 +352,30 @@ class APIClient {
   }
 
   async getCompanies() {
-    const { data, error } = await supabase
-      .from('companies')
-      .select(`
-        *,
-        calls:calls(count),
-        leads:leads(count)
-      `);
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+    
+    // Use RPC function to bypass RLS and get stats (admin only)
+    const { data, error } = await supabase.rpc('get_companies_with_stats', {
+      user_id_param: this.currentUser.id
+    });
     
     if (error) throw error;
     return { companies: data || [] };
   }
 
   async createTopup(data: any) {
-    const { error } = await supabase
-      .from('topups')
-      .insert([data]);
-    
-    if (error) throw error;
-    
-    // Update company balance
-    const { error: balanceError } = await supabase.rpc('add_company_balance', {
-      company_id_param: data.company_id,
-      amount_param: data.amount
+    // Use RPC function that handles both insert and balance update
+    const { data: result, error } = await supabase.rpc('create_topup', {
+      p_company_id: data.company_id,
+      p_amount: data.amount,
+      p_method: data.method || 'manual',
+      p_reference: data.reference || ''
     });
     
-    if (balanceError) console.error('Balance update failed:', balanceError);
-    
-    return { success: true };
+    if (error) throw error;
+    return { success: true, ...result };
   }
 
   async updateSettings(settings: any) {
