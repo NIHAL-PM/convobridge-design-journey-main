@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Home, PhoneIncoming, Bot, Users, Settings, LogOut, Menu, X, Phone,
   BarChart3, TrendingUp, Clock, Search, Plus, MoreVertical, ArrowUpRight,
   ArrowDownRight, Eye, Download, ChevronLeft, ChevronRight,
-  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play
+  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play, Megaphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PremiumAudioPlayer } from "@/components/PremiumAudioPlayer";
@@ -46,8 +46,17 @@ export default function Dashboard() {
   const [topupAmount, setTopupAmount] = useState("500");
   const [topupLoading, setTopupLoading] = useState(false);
 
+  // Campaigns State
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignPage, setCampaignPage] = useState(1);
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+  const [campaignName, setCampaignName] = useState("");
+  const [campaignNumbers, setCampaignNumbers] = useState("");
+  const [campaignAgent, setCampaignAgent] = useState("");
+  const [isLaunchingCampaign, setIsLaunchingCampaign] = useState(false);
+
   // Fetch real data from Supabase
-  const { stats, calls, agents, leads, topups, loading, refresh } = useDashboardData();
+  const { stats, calls, agents, leads, topups, loading, refresh, outboundCalls } = useDashboardData();
 
   // Load system prompt for Nilgiri bot when settings tab is active
   useEffect(() => {
@@ -74,6 +83,43 @@ export default function Dashboard() {
       toast({ title: "Failed to update system prompt", variant: "destructive" });
     } finally {
       setIsSavingPrompt(false);
+    }
+  };
+
+  const handleLaunchCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!campaignName || !campaignNumbers || !campaignAgent) {
+      toast.error("Please fill all fields");
+      return;
+    }
+    
+    // Parse numbers (split by comma, newline)
+    const numbers = campaignNumbers
+      .split(/[\n,;]+/)
+      .map(n => n.replace(/\D/g, ''))
+      .filter(n => n.length >= 10);
+      
+    if (numbers.length === 0) {
+      toast.error("No valid phone numbers found");
+      return;
+    }
+    
+    setIsLaunchingCampaign(true);
+    try {
+      await apiClient.launchCampaign('ai', {
+        campaign_name: campaignName,
+        numbers: numbers,
+        agent_id: campaignAgent 
+      });
+      toast.success(`Launched campaign for ${numbers.length} numbers`);
+      setCampaignModalOpen(false);
+      setCampaignName("");
+      setCampaignNumbers("");
+      setCampaignAgent("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to launch campaign");
+    } finally {
+      setIsLaunchingCampaign(false);
     }
   };
 
@@ -131,7 +177,8 @@ export default function Dashboard() {
   const menuItems = [
     { icon: Home, label: "Home", id: "home" },
     { icon: Bot, label: "Agents", id: "agents" },
-    { icon: PhoneIncoming, label: "Calls", id: "calls" },
+    { icon: PhoneIncoming, label: "Inbound", id: "calls" },
+    { icon: Megaphone, label: "Campaigns", id: "campaigns" },
     { icon: Users, label: "Leads", id: "leads" },
     { icon: BarChart3, label: "Analytics", id: "analytics" },
     { icon: Settings, label: "Settings", id: "settings" }
@@ -217,6 +264,20 @@ export default function Dashboard() {
   const callsPerPage = 5;
   const totalPages = Math.ceil(filteredCalls.length / callsPerPage);
   const paginatedCalls = filteredCalls.slice((callsPage - 1) * callsPerPage, callsPage * callsPerPage);
+
+  const filteredCampaigns = useMemo(() => {
+    if (!outboundCalls) return [];
+    return outboundCalls.filter((c: any) => {
+      const matchesSearch = campaignSearch === "" || 
+        c.target_number?.includes(campaignSearch) ||
+        c.campaign_tag?.toLowerCase().includes(campaignSearch.toLowerCase());
+      return matchesSearch;
+    });
+  }, [campaignSearch, outboundCalls]);
+
+  const campaignsPerPage = 5;
+  const campaignsTotalPages = Math.ceil(filteredCampaigns.length / campaignsPerPage) || 1;
+  const paginatedCampaigns = filteredCampaigns.slice((campaignPage - 1) * campaignsPerPage, campaignPage * campaignsPerPage);
 
   const renderHome = () => (
     <div className="space-y-8 animate-fade-in-up">
@@ -715,6 +776,188 @@ export default function Dashboard() {
                 size="sm"
                 onClick={() => setCallsPage(Math.min(totalPages, callsPage + 1))}
                 disabled={callsPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCampaigns = () => (
+    <div className="space-y-6 animate-fade-in-up">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-h2 font-semibold">Outbound Campaigns</h2>
+          <p className="text-muted-foreground text-sm">Launch automated calling campaigns</p>
+        </div>
+        <Button onClick={() => setCampaignModalOpen(true)}>
+          <Megaphone className="mr-2 h-4 w-4" />
+          New Campaign
+        </Button>
+      </div>
+
+      <Dialog open={campaignModalOpen} onOpenChange={setCampaignModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Launch AI Campaign</DialogTitle>
+            <DialogDescription>
+              Upload numbers and assign an agent to instantly dispatch calls.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleLaunchCampaign} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Campaign Name</label>
+              <Input
+                placeholder="e.g. Follow-up Leads Q1"
+                value={campaignName}
+                onChange={(e) => setCampaignName(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Agent</label>
+              <Select value={campaignAgent} onValueChange={setCampaignAgent} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an AI Agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents?.map(a => (
+                    <SelectItem key={a.id} value={a.id.toString()}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone Numbers</label>
+              <textarea
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[100px]"
+                placeholder="Enter numbers separated by commas or newlines (e.g. 9847493118, 919876543210)"
+                value={campaignNumbers}
+                onChange={(e) => setCampaignNumbers(e.target.value)}
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isLaunchingCampaign}>
+              {isLaunchingCampaign ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Dispatching...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Launch Now
+                </>
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="bg-card border rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b bg-muted/30 flex items-center gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search campaigns..."
+              value={campaignSearch}
+              onChange={(e) => {
+                setCampaignSearch(e.target.value);
+                setCampaignPage(1);
+              }}
+              className="pl-10 max-w-sm"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 border-b">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campaign</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Number</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cost</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center">
+                    <Loader className="h-5 w-5 text-muted-foreground mx-auto animate-spin" />
+                  </td>
+                </tr>
+              ) : paginatedCampaigns.length > 0 ? (
+                paginatedCampaigns.map((call: any) => (
+                  <tr key={call.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">
+                      {formatTime(call.started_at)}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium">
+                      {call.campaign_tag || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono text-muted-foreground">
+                      {call.target_number || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono">
+                      {formatDuration(call.duration_sec)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold 
+                        ${call.status === 'completed' ? 'bg-green-500/10 text-green-600' :
+                        call.status === 'failed' ? 'bg-red-500/10 text-red-600' :
+                        call.status === 'queued' ? 'bg-yellow-500/10 text-yellow-600' :
+                        'bg-blue-500/10 text-blue-600'}`}>
+                        {call.status || 'unknown'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {call.cost != null ? `₹${Number(call.cost).toFixed(2)}` : '—'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <Megaphone className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                    <p className="text-muted-foreground">No outbound campaigns yet</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {campaignsTotalPages > 1 && (
+          <div className="px-6 py-4 border-t flex items-center justify-between bg-muted/30">
+            <p className="text-sm text-muted-foreground">
+              Showing {(campaignPage - 1) * campaignsPerPage + 1} to {Math.min(campaignPage * campaignsPerPage, filteredCampaigns.length)} of {filteredCampaigns.length} total
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCampaignPage(Math.max(1, campaignPage - 1))}
+                disabled={campaignPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="flex items-center px-3 text-sm font-medium">
+                Page {campaignPage} of {campaignsTotalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCampaignPage(Math.min(campaignsTotalPages, campaignPage + 1))}
+                disabled={campaignPage === campaignsTotalPages}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -1224,6 +1467,7 @@ export default function Dashboard() {
           {activeTab === "home" && renderHome()}
           {activeTab === "agents" && renderAgents()}
           {activeTab === "calls" && renderCalls()}
+          {activeTab === "campaigns" && renderCampaigns()}
           {activeTab === "leads" && renderLeads()}
           {activeTab === "analytics" && renderAnalytics()}
           {activeTab === "settings" && renderSettings()}

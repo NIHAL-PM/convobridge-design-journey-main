@@ -11,6 +11,7 @@ export const useDashboardData = () => {
   const [agents, setAgents] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [topups, setTopups] = useState<any[]>([]);
+  const [outboundCalls, setOutboundCalls] = useState<any[]>([]);
 
   const fetchData = async () => {
     if (!user?.id) return;
@@ -19,11 +20,12 @@ export const useDashboardData = () => {
       setLoading(true);
       
       // Use RPC functions instead of direct queries to bypass RLS
-      const [callsRes, leadsRes, companyRes, topupsRes] = await Promise.all([
+      const [callsRes, leadsRes, companyRes, topupsRes, outboundRes] = await Promise.all([
         supabase.rpc('get_user_calls', { user_id_param: user.id }),
         supabase.rpc('get_user_leads', { user_id_param: user.id }),
         supabase.rpc('get_user_company', { user_id_param: user.id }),
-        supabase.rpc('get_user_topups', { user_id_param: user.id })
+        supabase.rpc('get_user_topups', { user_id_param: user.id }),
+        supabase.rpc('get_user_outbound_calls', { user_id_param: user.id })
       ]);
 
       if (callsRes.error) throw callsRes.error;
@@ -34,6 +36,7 @@ export const useDashboardData = () => {
       const leadsData = leadsRes.data || [];
       const companyData = companyRes.data; // This is now JSONB object
       const topupsData = topupsRes.data || [];
+      const outboundData = outboundRes.data || [];
       
       // Calculate analytics
       const totalCalls = callsData.length;
@@ -60,6 +63,7 @@ export const useDashboardData = () => {
         isActive: companyData?.active 
       }]);
       setTopups(topupsData);
+      setOutboundCalls(outboundData);
 
     } catch (error: any) {
       console.error('Dashboard data fetch error:', error);
@@ -104,10 +108,21 @@ export const useDashboardData = () => {
         }, () => fetchData())
         .subscribe();
 
+      const outboundSubscription = supabase
+        .channel(`company-outbound-${user.company_id}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'outbound_calls',
+          filter: `company_id=eq.${user.company_id}`
+        }, () => fetchData())
+        .subscribe();
+
       return () => {
         supabase.removeChannel(callsSubscription);
         supabase.removeChannel(leadsSubscription);
         supabase.removeChannel(companiesSubscription);
+        supabase.removeChannel(outboundSubscription);
       };
     }
   }, [user?.id]);
@@ -120,5 +135,6 @@ export const useDashboardData = () => {
     leads,
     refresh: fetchData,
     topups,
+    outboundCalls,
   };
 };

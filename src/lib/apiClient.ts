@@ -131,9 +131,20 @@ class APIClient {
 
   // Agents
   async createAgent(agentData: any) {
+    // Map frontend camelCase names to Supabase snake_case schema
+    const payload = {
+      name: agentData.name,
+      company_id: this.currentUser?.company_id,
+      voice: agentData.voice,
+      language: Array.isArray(agentData.languages) ? agentData.languages.join(', ') : agentData.languages,
+      personality: agentData.personality,
+      master_prompt: agentData.systemPrompt || '',
+      is_active: agentData.isDeployed !== false
+    };
+
     const { data, error } = await supabase
       .from('agents')
-      .insert([{ ...agentData, company_id: this.currentUser?.company_id }])
+      .insert([payload])
       .select()
       .single();
     
@@ -282,6 +293,51 @@ class APIClient {
         avgDuration: totalCalls > 0 ? totalDuration / totalCalls : 0,
       }
     };
+  }
+
+  // Outbound Campaigns
+  async getOutboundCalls() {
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+    
+    const { data, error } = await supabase.rpc('get_user_outbound_calls', {
+      user_id_param: this.currentUser.id
+    });
+    
+    if (error) throw error;
+    return { calls: data || [] };
+  }
+
+  async launchCampaign(type: 'ai' | 'audio' | 'tts', payload: any) {
+    if (!this.currentUser) {
+      throw new Error('Not authenticated');
+    }
+
+    // Pass the company_id automatically
+    const requestPayload = {
+      ...payload,
+      company_id: this.currentUser.company_id
+    };
+
+    const apiKey = (import.meta as any).env?.VITE_API_SECRET_KEY || localStorage.getItem('api_secret_key') || '';
+    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || '';
+    
+    const res = await fetch(`${baseUrl}/api/campaign/${type}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `Failed to launch ${type.toUpperCase()} campaign`);
+    }
+
+    return res.json();
   }
 
   // Contacts
