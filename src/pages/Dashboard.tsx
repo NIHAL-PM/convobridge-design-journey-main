@@ -50,10 +50,15 @@ export default function Dashboard() {
   const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignPage, setCampaignPage] = useState(1);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+  const [campaignMode, setCampaignMode] = useState<'ai' | 'tts' | 'audio'>('ai');
   const [campaignName, setCampaignName] = useState("");
   const [campaignNumbers, setCampaignNumbers] = useState("");
   const [campaignAgent, setCampaignAgent] = useState("");
+  const [campaignText, setCampaignText] = useState("");
+  const [campaignTtsProvider, setCampaignTtsProvider] = useState<'google' | 'sarvam'>('google');
+  const [campaignCloudUrl, setCampaignCloudUrl] = useState("");
   const [isLaunchingCampaign, setIsLaunchingCampaign] = useState(false);
+  const [campaignResult, setCampaignResult] = useState<any>(null);
 
   // Fetch real data from Supabase
   const { stats, calls, agents, leads, topups, loading, refresh, outboundCalls } = useDashboardData();
@@ -88,34 +93,60 @@ export default function Dashboard() {
 
   const handleLaunchCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!campaignName || !campaignNumbers || !campaignAgent) {
-      toast.error("Please fill all fields");
+    if (!campaignName || !campaignNumbers) {
+      toast.error("Campaign name and phone numbers are required");
       return;
     }
-    
-    // Parse numbers (split by comma, newline)
+    if (campaignMode === 'ai' && !campaignAgent) {
+      toast.error("Please select an AI agent");
+      return;
+    }
+    if (campaignMode === 'tts' && !campaignText) {
+      toast.error("Please enter the message text for TTS");
+      return;
+    }
+    if (campaignMode === 'audio' && !campaignCloudUrl) {
+      toast.error("Please enter a Cloudinary audio URL");
+      return;
+    }
+
+    // Parse numbers (split by comma, newline, semicolon)
     const numbers = campaignNumbers
       .split(/[\n,;]+/)
-      .map(n => n.replace(/\D/g, ''))
+      .map(n => n.trim().replace(/\D/g, ''))
       .filter(n => n.length >= 10);
-      
+
     if (numbers.length === 0) {
-      toast.error("No valid phone numbers found");
+      toast.error("No valid phone numbers found (minimum 10 digits)");
       return;
     }
-    
+
+    // Build base payload — company_id is automatically injected by apiClient.launchCampaign
+    const basePayload: any = { numbers };
+
+    if (campaignMode === 'tts') {
+      basePayload.text = campaignText;
+      basePayload.provider = campaignTtsProvider;
+    }
+    if (campaignMode === 'audio') {
+      basePayload.cloudUrl = campaignCloudUrl;
+    }
+    if (campaignMode === 'ai') {
+      basePayload.agent_id = campaignAgent;
+    }
+
     setIsLaunchingCampaign(true);
+    setCampaignResult(null);
     try {
-      await apiClient.launchCampaign('ai', {
-        campaign_name: campaignName,
-        numbers: numbers,
-        agent_id: campaignAgent 
-      });
-      toast.success(`Launched campaign for ${numbers.length} numbers`);
+      const result = await apiClient.launchCampaign(campaignMode, basePayload);
+      setCampaignResult(result);
+      toast.success(`✅ Campaign dispatched to ${numbers.length} number${numbers.length !== 1 ? 's' : ''}!`);
       setCampaignModalOpen(false);
       setCampaignName("");
       setCampaignNumbers("");
       setCampaignAgent("");
+      setCampaignText("");
+      setCampaignCloudUrl("");
     } catch (err: any) {
       toast.error(err.message || "Failed to launch campaign");
     } finally {
@@ -788,90 +819,160 @@ export default function Dashboard() {
 
   const renderCampaigns = () => (
     <div className="space-y-6 animate-fade-in-up">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-h2 font-semibold">Outbound Campaigns</h2>
-          <p className="text-muted-foreground text-sm">Launch automated calling campaigns</p>
+          <p className="text-muted-foreground text-sm">Launch automated calling campaigns to your contacts</p>
         </div>
-        <Button onClick={() => setCampaignModalOpen(true)}>
+        <Button onClick={() => { setCampaignModalOpen(true); setCampaignResult(null); }}>
           <Megaphone className="mr-2 h-4 w-4" />
           New Campaign
         </Button>
       </div>
 
+      {/* === LAUNCH DIALOG === */}
       <Dialog open={campaignModalOpen} onOpenChange={setCampaignModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Launch AI Campaign</DialogTitle>
-            <DialogDescription>
-              Upload numbers and assign an agent to instantly dispatch calls.
-            </DialogDescription>
+            <DialogTitle>Launch Campaign</DialogTitle>
+            <DialogDescription>Choose a campaign type and configure your outbound blast.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleLaunchCampaign} className="space-y-4 pt-4">
-            <div className="space-y-2">
+          
+          {/* Mode Tab Bar */}
+          <div className="flex gap-1 bg-muted rounded-lg p-1 mt-2">
+            {(['ai', 'tts', 'audio'] as const).map(mode => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setCampaignMode(mode)}
+                className={`flex-1 py-2 rounded-md text-xs font-semibold transition-all ${
+                  campaignMode === mode
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {mode === 'ai' && '🤖 AI Calling'}
+                {mode === 'tts' && '🔊 Text-to-Speech'}
+                {mode === 'audio' && '📁 Audio File'}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleLaunchCampaign} className="space-y-4">
+            {/* Campaign Name */}
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">Campaign Name</label>
               <Input
-                placeholder="e.g. Follow-up Leads Q1"
+                placeholder="e.g. Q1 Lead Follow-up"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
                 required
               />
             </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Agent</label>
-              <Select value={campaignAgent} onValueChange={setCampaignAgent} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an AI Agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents?.map(a => (
-                    <SelectItem key={a.id} value={a.id.toString()}>{a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div className="space-y-2">
+            {/* Phone Numbers */}
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">Phone Numbers</label>
               <textarea
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[100px]"
-                placeholder="Enter numbers separated by commas or newlines (e.g. 9847493118, 919876543210)"
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[90px]"
+                placeholder="Enter one per line or comma-separated&#10;e.g. 9847493118, 9876543210"
                 value={campaignNumbers}
                 onChange={(e) => setCampaignNumbers(e.target.value)}
                 required
               />
+              {campaignNumbers && (
+                <p className="text-xs text-muted-foreground">
+                  {campaignNumbers.split(/[\n,;]+/).map(n => n.trim().replace(/\D/g, '')).filter(n => n.length >= 10).length} valid numbers
+                </p>
+              )}
             </div>
 
+            {/* === AI Calling Mode === */}
+            {campaignMode === 'ai' && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">AI Agent</label>
+                <Select value={campaignAgent} onValueChange={setCampaignAgent}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an agent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents && agents.length > 0 ? agents.map((a: any) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                    )) : (
+                      <SelectItem value="__none" disabled>No agents available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Agent handles live 2-way conversation using Gemini AI</p>
+              </div>
+            )}
+
+            {/* === TTS Mode === */}
+            {campaignMode === 'tts' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Message Text</label>
+                  <textarea
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[100px]"
+                    placeholder="Enter the message to be spoken to the customer..."
+                    value={campaignText}
+                    onChange={(e) => setCampaignText(e.target.value)}
+                    required={campaignMode === 'tts'}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Voice Engine</label>
+                  <Select value={campaignTtsProvider} onValueChange={(v: 'google' | 'sarvam') => setCampaignTtsProvider(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="google">🌐 Google Wavenet (English/Multi)</SelectItem>
+                      <SelectItem value="sarvam">🇮🇳 Sarvam Bulbul (Hindi/Indian)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {/* === Audio File Mode === */}
+            {campaignMode === 'audio' && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Cloudinary Audio URL</label>
+                <Input
+                  placeholder="https://res.cloudinary.com/.../recording.wav"
+                  value={campaignCloudUrl}
+                  onChange={(e) => setCampaignCloudUrl(e.target.value)}
+                  required={campaignMode === 'audio'}
+                />
+                <p className="text-xs text-muted-foreground">Paste a public WAV/MP3 URL from Cloudinary. The server will download &amp; convert automatically.</p>
+              </div>
+            )}
+
+            {/* Launch Button */}
             <Button type="submit" className="w-full" disabled={isLaunchingCampaign}>
               {isLaunchingCampaign ? (
-                <>
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Dispatching...
-                </>
+                <><Loader className="mr-2 h-4 w-4 animate-spin" /> Dispatching...</>
               ) : (
-                <>
-                  <Play className="mr-2 h-4 w-4" />
-                  Launch Now
-                </>
+                <><Play className="mr-2 h-4 w-4" /> Launch Campaign</>
               )}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* === CAMPAIGN HISTORY TABLE === */}
       <div className="bg-card border rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b bg-muted/30 flex items-center gap-4">
-          <div className="flex-1 relative">
+        <div className="px-6 py-4 border-b bg-muted/30 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Campaign History</h3>
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search campaigns..."
+              placeholder="Search by number or type..."
               value={campaignSearch}
-              onChange={(e) => {
-                setCampaignSearch(e.target.value);
-                setCampaignPage(1);
-              }}
-              className="pl-10 max-w-sm"
+              onChange={(e) => { setCampaignSearch(e.target.value); setCampaignPage(1); }}
+              className="pl-10 w-64"
             />
           </div>
         </div>
@@ -881,8 +982,8 @@ export default function Dashboard() {
             <thead className="bg-muted/50 border-b">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campaign</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Number</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campaign / Type</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Duration</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cost</th>
@@ -890,47 +991,39 @@ export default function Dashboard() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center">
-                    <Loader className="h-5 w-5 text-muted-foreground mx-auto animate-spin" />
-                  </td>
-                </tr>
+                <tr><td colSpan={6} className="px-6 py-8 text-center">
+                  <Loader className="h-5 w-5 text-muted-foreground mx-auto animate-spin" />
+                </td></tr>
               ) : paginatedCampaigns.length > 0 ? (
-                paginatedCampaigns.map((call: any) => (
-                  <tr key={call.id} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">
-                      {formatTime(call.started_at)}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium">
-                      {call.campaign_tag || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono text-muted-foreground">
-                      {call.target_number || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono">
-                      {formatDuration(call.duration_sec)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold 
-                        ${call.status === 'completed' ? 'bg-green-500/10 text-green-600' :
-                        call.status === 'failed' ? 'bg-red-500/10 text-red-600' :
-                        call.status === 'queued' ? 'bg-yellow-500/10 text-yellow-600' :
-                        'bg-blue-500/10 text-blue-600'}`}>
-                        {call.status || 'unknown'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {call.cost != null ? `₹${Number(call.cost).toFixed(2)}` : '—'}
-                    </td>
-                  </tr>
-                ))
+                paginatedCampaigns.map((call: any) => {
+                  const tag = (call.campaign_tag || '').toLowerCase();
+                  const typeLabel = tag.includes('tts') ? '🔊 TTS' : tag.includes('audio') ? '📁 Audio' : '🤖 AI';
+                  return (
+                    <tr key={call.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">{formatTime(call.started_at)}</td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium block">{call.campaign_tag || '—'}</span>
+                        <span className="text-xs text-muted-foreground">{typeLabel}</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{call.target_number || '—'}</td>
+                      <td className="px-6 py-4 text-sm font-mono">{formatDuration(call.duration_sec)}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          call.status === 'completed' ? 'bg-green-500/10 text-green-600' :
+                          call.status === 'failed' ? 'bg-red-500/10 text-red-600' :
+                          call.status === 'answered' ? 'bg-blue-500/10 text-blue-600' :
+                          'bg-yellow-500/10 text-yellow-600'
+                        }`}>{call.status || 'queued'}</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">{call.cost != null ? `₹${Number(call.cost).toFixed(2)}` : '—'}</td>
+                    </tr>
+                  );
+                })
               ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <Megaphone className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
-                    <p className="text-muted-foreground">No outbound campaigns yet</p>
-                  </td>
-                </tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center">
+                  <Megaphone className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                  <p className="text-muted-foreground">No campaigns launched yet. Click "New Campaign" to start.</p>
+                </td></tr>
               )}
             </tbody>
           </table>
@@ -939,26 +1032,14 @@ export default function Dashboard() {
         {campaignsTotalPages > 1 && (
           <div className="px-6 py-4 border-t flex items-center justify-between bg-muted/30">
             <p className="text-sm text-muted-foreground">
-              Showing {(campaignPage - 1) * campaignsPerPage + 1} to {Math.min(campaignPage * campaignsPerPage, filteredCampaigns.length)} of {filteredCampaigns.length} total
+              Showing {(campaignPage - 1) * campaignsPerPage + 1} – {Math.min(campaignPage * campaignsPerPage, filteredCampaigns.length)} of {filteredCampaigns.length}
             </p>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCampaignPage(Math.max(1, campaignPage - 1))}
-                disabled={campaignPage === 1}
-              >
+              <Button variant="outline" size="sm" onClick={() => setCampaignPage(Math.max(1, campaignPage - 1))} disabled={campaignPage === 1}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="flex items-center px-3 text-sm font-medium">
-                Page {campaignPage} of {campaignsTotalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCampaignPage(Math.min(campaignsTotalPages, campaignPage + 1))}
-                disabled={campaignPage === campaignsTotalPages}
-              >
+              <span className="flex items-center px-3 text-sm font-medium">Page {campaignPage} of {campaignsTotalPages}</span>
+              <Button variant="outline" size="sm" onClick={() => setCampaignPage(Math.min(campaignsTotalPages, campaignPage + 1))} disabled={campaignPage === campaignsTotalPages}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -967,6 +1048,9 @@ export default function Dashboard() {
       </div>
     </div>
   );
+
+
+
 
   const renderLeads = () => (
     <div className="space-y-6 animate-fade-in-up">
