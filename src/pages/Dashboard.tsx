@@ -1428,10 +1428,40 @@ export default function Dashboard() {
           <div>
             <p className="text-sm text-muted-foreground mb-4">Manage API tokens and third-party integrations</p>
             <div className="bg-muted/50 rounded-lg p-4">
-              <p className="text-sm font-mono text-muted-foreground">API Key: sk_live_••••••••••••••••</p>
-              <Button variant="outline" size="sm" className="mt-3">
-                Regenerate API Key
-              </Button>
+              <p className="text-sm font-mono text-muted-foreground">
+                API Key: {localStorage.getItem('api_secret_key') ? `cb_live_••••${localStorage.getItem('api_secret_key')?.slice(-6)}` : 'sk_live_••••••••••••••••'}
+              </p>
+              <div className="flex gap-2 mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={async () => {
+                    if (confirm("Are you sure you want to regenerate your API key? The old one will stop working immediately.")) {
+                      try {
+                        const { apiKey } = await apiClient.regenerateApiKey();
+                        toast.success("API key regenerated successfully");
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to regenerate API key");
+                      }
+                    }
+                  }}
+                >
+                  Regenerate API Key
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const key = localStorage.getItem('api_secret_key');
+                    if (key) {
+                      navigator.clipboard.writeText(key);
+                      toast.success("API key copied to clipboard");
+                    }
+                  }}
+                >
+                  Copy Key
+                </Button>
+              </div>
             </div>
           </div>
 

@@ -83,6 +83,11 @@ class APIClient {
     this.currentUser = result.user;
     localStorage.setItem('currentUser', JSON.stringify(result.user));
     
+    // Also store API key separately for convenience
+    if (result.user.api_key) {
+      localStorage.setItem('api_secret_key', result.user.api_key);
+    }
+    
     return { user: result.user };
   }
 
@@ -320,8 +325,8 @@ class APIClient {
       company_id: this.currentUser.company_id
     };
 
-    const apiKey = (import.meta as any).env?.VITE_API_SECRET_KEY || localStorage.getItem('api_secret_key') || '';
-    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || '';
+    const apiKey = localStorage.getItem('api_secret_key') || (import.meta as any).env?.VITE_API_SECRET_KEY || '';
+    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3000';
     
     const res = await fetch(`${baseUrl}/api/campaign/${type}`, {
       method: 'POST',
@@ -451,10 +456,28 @@ class APIClient {
   }
 
   async regenerateApiKey() {
-    // Generate a simple API key (you should use a more secure method in production)
-    const apiKey = 'cb_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-    localStorage.setItem('user_api_key', apiKey);
-    return { settings: { apiKey } };
+    if (!this.currentUser?.id) {
+      throw new Error('Not authenticated');
+    }
+
+    const { data, error } = await supabase.rpc('regenerate_user_api_key', {
+      user_id_param: this.currentUser.id
+    });
+
+    if (error) throw error;
+    
+    const newKey = data as string;
+    
+    // Update local storage
+    localStorage.setItem('api_secret_key', newKey);
+    
+    // Update current user object if it exists
+    if (this.currentUser) {
+      this.currentUser.api_key = newKey;
+      localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+    }
+
+    return { apiKey: newKey };
   }
 
   async connectIntegration(name: string, data: any) {
