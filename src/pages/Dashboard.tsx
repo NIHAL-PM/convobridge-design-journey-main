@@ -60,6 +60,10 @@ export default function Dashboard() {
   const [isLaunchingCampaign, setIsLaunchingCampaign] = useState(false);
   const [campaignResult, setCampaignResult] = useState<any>(null);
 
+  // API Key State
+  const [apiKey, setApiKey] = useState<string>(localStorage.getItem("api_secret_key") || "");
+  const [showApiKey, setShowApiKey] = useState(false);
+
   // Fetch real data from Supabase
   const { stats, calls, agents, leads, topups, loading, refresh, outboundCalls } = useDashboardData();
 
@@ -199,10 +203,13 @@ export default function Dashboard() {
       try {
         const user = JSON.parse(userData);
         setUserName(user.name || "User");
+        if (user.api_key) setApiKey(user.api_key);
       } catch (e) {
         setUserName("User");
       }
     }
+    const storedKey = localStorage.getItem("api_secret_key");
+    if (storedKey) setApiKey(storedKey);
   }, []);
 
   const menuItems = [
@@ -1428,17 +1435,27 @@ export default function Dashboard() {
           <div>
             <p className="text-sm text-muted-foreground mb-4">Manage API tokens and third-party integrations</p>
             <div className="bg-muted/50 rounded-lg p-4">
-              <p className="text-sm font-mono text-muted-foreground">
-                API Key: {localStorage.getItem('api_secret_key') ? `cb_live_••••${localStorage.getItem('api_secret_key')?.slice(-6)}` : 'sk_live_••••••••••••••••'}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your Private API Key</label>
+                <button 
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest"
+                >
+                  {showApiKey ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="text-sm font-mono text-foreground bg-background/50 p-2 rounded border border-border/40 select-all overflow-x-auto whitespace-nowrap">
+                {apiKey ? (showApiKey ? apiKey : `cb_live_••••${apiKey.slice(-6)}`) : 'sk_live_••••••••••••••••'}
               </p>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-4">
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={async () => {
                     if (confirm("Are you sure you want to regenerate your API key? The old one will stop working immediately.")) {
                       try {
-                        const { apiKey } = await apiClient.regenerateApiKey();
+                        const { apiKey: newKey } = await apiClient.regenerateApiKey();
+                        setApiKey(newKey);
                         toast.success("API key regenerated successfully");
                       } catch (err: any) {
                         toast.error(err.message || "Failed to regenerate API key");
@@ -1452,13 +1469,13 @@ export default function Dashboard() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    const key = localStorage.getItem('api_secret_key');
-                    if (key) {
-                      navigator.clipboard.writeText(key);
+                    if (apiKey) {
+                      navigator.clipboard.writeText(apiKey);
                       toast.success("API key copied to clipboard");
                     }
                   }}
                 >
+                  <Download className="h-3 w-3 mr-2 rotate-180" />
                   Copy Key
                 </Button>
               </div>
