@@ -9,7 +9,7 @@ export async function proxyCampaign({ req, res, type }) {
   const apiKey = getBearerToken(req);
   if (!apiKey) return sendJson(res, 401, { success: false, error: "Missing API key" });
 
-  const upstreamBase = process.env.ASTERISK_API_BASE_URL || "https://api.convobridge.in:3000";
+  const upstreamBase = process.env.ASTERISK_API_BASE_URL || "http://api.convobridge.in:3000";
   const upstreamUrl = `${upstreamBase.replace(/\/$/, "")}/api/campaign/${type}`;
 
   try {

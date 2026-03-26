@@ -85,7 +85,7 @@ export default function Dashboard() {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to update prompt');
-      toast({ title: "System prompt updated successfully" });
+      toast.success("System prompt updated successfully");
       refresh();
     } catch (err: any) {
       console.error("Error updating prompt:", err);
@@ -162,7 +162,7 @@ export default function Dashboard() {
   const handleTopup = async () => {
     const amount = parseFloat(topupAmount);
     if (isNaN(amount) || amount < 1) {
-      toast({ title: "Enter a valid amount (min ₹1)", variant: "destructive" });
+      toast.error("Enter a valid amount (min ₹1)");
       return;
     }
     if (!stats?.company?.id) {
@@ -180,7 +180,7 @@ export default function Dashboard() {
         description: "Outbound Balance Top-Up",
         order_id: order.order_id,
         handler: () => {
-          toast({ title: `₹${amount.toFixed(2)} top-up initiated! Balance updates within seconds.` });
+          toast.success(`₹${amount.toFixed(2)} top-up initiated! Balance updates within seconds.`);
           setTopupOpen(false);
           setTimeout(() => refresh(), 3000);
         },
@@ -190,7 +190,7 @@ export default function Dashboard() {
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
     } catch (e: any) {
-      toast({ title: `Top-up failed: ${e.message}`, variant: "destructive" });
+      toast.error(`Top-up failed: ${e.message}`);
     } finally {
       setTopupLoading(false);
     }
