@@ -198,18 +198,25 @@ export default function Dashboard() {
 
   // Get user info on mount
   useEffect(() => {
-    const userData = localStorage.getItem("user");
+    let currentKey = localStorage.getItem("api_secret_key");
+    const userData = localStorage.getItem("currentUser") || localStorage.getItem("user");
+    
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        setUserName(user.name || "User");
-        if (user.api_key) setApiKey(user.api_key);
+        setUserName(user.name || user.full_name || "User");
+        if (user.api_key && !currentKey) {
+          currentKey = user.api_key;
+          localStorage.setItem("api_secret_key", currentKey);
+        }
       } catch (e) {
         setUserName("User");
       }
     }
-    const storedKey = localStorage.getItem("api_secret_key");
-    if (storedKey) setApiKey(storedKey);
+    
+    if (currentKey) {
+      setApiKey(currentKey);
+    }
   }, []);
 
   const menuItems = [
@@ -1437,15 +1444,17 @@ export default function Dashboard() {
             <div className="bg-muted/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your Private API Key</label>
-                <button 
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest"
-                >
-                  {showApiKey ? "Hide" : "Show"}
-                </button>
+                {apiKey && (
+                  <button 
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest"
+                  >
+                    {showApiKey ? "Hide" : "Show"}
+                  </button>
+                )}
               </div>
               <p className="text-sm font-mono text-foreground bg-background/50 p-2 rounded border border-border/40 select-all overflow-x-auto whitespace-nowrap">
-                {apiKey ? (showApiKey ? apiKey : `cb_live_••••${apiKey.slice(-6)}`) : 'sk_live_••••••••••••••••'}
+                {apiKey ? (showApiKey ? apiKey : `••••••••••••••••${apiKey.slice(-5)}`) : 'No API key found. Click Regenerate below.'}
               </p>
               <div className="flex gap-2 mt-4">
                 <Button 
