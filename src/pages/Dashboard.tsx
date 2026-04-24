@@ -4,7 +4,7 @@ import {
   Home, PhoneIncoming, Bot, Users, Settings, LogOut, Menu, X, Phone,
   BarChart3, TrendingUp, Clock, Search, Plus, MoreVertical, ArrowUpRight,
   ArrowDownRight, Eye, Download, ChevronLeft, ChevronRight,
-  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play, Megaphone, Square, Trash2
+  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play, Megaphone, Square, Trash2, Music
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PremiumAudioPlayer } from "@/components/PremiumAudioPlayer";
