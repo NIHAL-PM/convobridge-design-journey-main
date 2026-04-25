@@ -849,29 +849,31 @@ export default function Dashboard() {
                     <td className="px-6 py-4 text-sm">
                       {call.cost != null ? `₹${Number(call.cost).toFixed(2)}` : '—'}
                     </td>
-                    <td className="px-6 py-4 flex items-center gap-2">
-                      {call.recording_url && (
-                        <a
-                          href={call.recording_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={`recording_${call.caller_number || call.id}.wav`}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        {call.recording_url && (
+                          <a
+                            href={call.recording_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={`recording_${call.caller_number || call.id}.wav`}
+                            className="text-primary hover:text-primary/80 transition-colors"
+                            title="Download recording"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedCall(call);
+                            setCallDetailOpen(true);
+                          }}
                           className="text-primary hover:text-primary/80 transition-colors"
-                          title="Download recording"
+                          title="View transcript"
                         >
-                          <Download className="h-4 w-4" />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => {
-                          setSelectedCall(call);
-                          setCallDetailOpen(true);
-                        }}
-                        className="text-primary hover:text-primary/80 transition-colors"
-                        title="View transcript"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
