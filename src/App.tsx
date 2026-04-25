@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import PitchDeck from "./pages/PitchDeck";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => {
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/agents/new" element={<ProtectedRoute><AgentBuilder /></ProtectedRoute>} />
               <Route path="/dashboard/agents/edit/:id" element={<ProtectedRoute><AgentBuilder /></ProtectedRoute>} />
+              <Route path="/pitch" element={<PitchDeck />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
