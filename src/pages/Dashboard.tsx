@@ -1258,7 +1258,11 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {leads.map((lead: any) => (
+                {leads.map((lead: any) => {
+                  const relatedCall = calls?.find((c: any) => c.id === lead.call_id);
+                  const isCallbackReq = relatedCall?.metadata?.callback_requested || lead.notes?.includes("CALLBACK_REQUESTED") || lead.interest?.includes("CALLBACK_REQUESTED");
+
+                  return (
                   <tr key={lead.id} className="hover:bg-muted/30 transition-colors group">
                     <td className="px-6 py-4 text-xs text-muted-foreground">
                       {new Date(lead.created_at).toLocaleDateString()}
@@ -1269,7 +1273,15 @@ export default function Dashboard() {
                           {(lead.name || 'A')[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold">{lead.name || "Anonymous Lead"}</p>
+                          <p className="text-sm font-semibold flex items-center gap-2">
+                            {lead.name || "Anonymous Lead"}
+                            {isCallbackReq && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-orange-500/10 text-orange-600 w-fit" title="Callback Requested">
+                                <Phone className="h-2.5 w-2.5 mr-1" />
+                                Callback Req
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-muted-foreground font-mono">{lead.phone || lead.email || "No contact info"}</p>
                         </div>
                       </div>
@@ -1295,7 +1307,8 @@ export default function Dashboard() {
                       </Button>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
