@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Check, Loader2, Lock, Save, Sparkles, Bot, Play, Square } from 'lucide-react';
+import { Copy, Check, Loader2, Lock, Save, Sparkles, Bot, Play, Square, MessageCircle, Wifi } from 'lucide-react';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -33,6 +33,12 @@ export default function Settings() {
   const [fetchingPrompt, setFetchingPrompt] = useState(false);
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [whatsappInstanceName, setWhatsappInstanceName] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [whatsappStatus, setWhatsappStatus] = useState<any>(null);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const [whatsappTestNumber, setWhatsappTestNumber] = useState("");
+  const [whatsappTestText, setWhatsappTestText] = useState("Hello from ConvoBridge.");
 
   const voices = [
     { id: "puck", name: "Puck", gender: "Male", desc: "Energetic" },
@@ -69,6 +75,7 @@ export default function Settings() {
   useEffect(() => {
     loadSettings();
     loadAgents();
+    loadWhatsAppStatus();
   }, []);
 
   const loadSettings = async () => {
@@ -187,6 +194,66 @@ export default function Settings() {
       toast({ title: 'API key regenerated successfully' });
     } catch (err) {
       toast({ title: 'Failed to regenerate API key', variant: 'destructive' });
+    }
+  };
+
+  const loadWhatsAppStatus = async () => {
+    setWhatsappLoading(true);
+    try {
+      const res = await apiClient.getEvolutionStatus(whatsappInstanceName || undefined);
+      setWhatsappStatus(res);
+      setWhatsappInstanceName(res.instanceName || "");
+    } catch (err: any) {
+      setWhatsappStatus({ success: false, error: err?.message || "Not connected" });
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
+  const handleCreateWhatsAppInstance = async () => {
+    setWhatsappLoading(true);
+    try {
+      const res = await apiClient.createEvolutionInstance({
+        instanceName: whatsappInstanceName || undefined,
+        number: whatsappNumber || undefined,
+      });
+      setWhatsappStatus(res);
+      setWhatsappInstanceName(res.instanceName || whatsappInstanceName);
+      toast({ title: 'WhatsApp instance created' });
+    } catch (err: any) {
+      toast({ title: 'Failed to create WhatsApp instance', description: err?.message, variant: 'destructive' });
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
+  const handleConnectWhatsApp = async () => {
+    setWhatsappLoading(true);
+    try {
+      const res = await apiClient.connectEvolutionInstance(whatsappInstanceName || undefined);
+      setWhatsappStatus(res);
+      setWhatsappInstanceName(res.instanceName || whatsappInstanceName);
+      toast({ title: 'WhatsApp connection started' });
+    } catch (err: any) {
+      toast({ title: 'Failed to connect WhatsApp', description: err?.message, variant: 'destructive' });
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
+  const handleSendWhatsAppTest = async () => {
+    setWhatsappLoading(true);
+    try {
+      await apiClient.sendEvolutionText({
+        instanceName: whatsappInstanceName || undefined,
+        number: whatsappTestNumber,
+        text: whatsappTestText,
+      });
+      toast({ title: 'Test WhatsApp message sent' });
+    } catch (err: any) {
+      toast({ title: 'Failed to send test message', description: err?.message, variant: 'destructive' });
+    } finally {
+      setWhatsappLoading(false);
     }
   };
 

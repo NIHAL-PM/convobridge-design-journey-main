@@ -494,7 +494,7 @@ export default function Admin() {
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Label / Description</label>
-                    <Input placeholder="KSRTC Support Line" value={newLabel}
+                    <Input placeholder="ConvoBank Support Line" value={newLabel}
                       onChange={e => setNewLabel(e.target.value)} />
                   </div>
                   <div>

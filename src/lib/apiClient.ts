@@ -541,6 +541,49 @@ class APIClient {
     return { success: true };
   }
 
+  private async evolutionRequest(action: string, payload: Record<string, any> = {}) {
+    const apiKey = localStorage.getItem('api_secret_key') || this.currentUser?.api_key || '';
+    if (!apiKey) {
+      throw new Error('Missing API key. Please re-login to manage WhatsApp.');
+    }
+
+    const res = await fetch('/api/evolution', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+
+    const data = await res.json().catch(() => ({ success: false, error: res.statusText }));
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.error || 'Evolution API request failed');
+    }
+
+    return data;
+  }
+
+  async getEvolutionStatus(instanceName?: string) {
+    return this.evolutionRequest('status', { instanceName });
+  }
+
+  async createEvolutionInstance(data: { instanceName?: string; number?: string }) {
+    return this.evolutionRequest('createInstance', data);
+  }
+
+  async connectEvolutionInstance(instanceName?: string) {
+    return this.evolutionRequest('connect', { instanceName });
+  }
+
+  async logoutEvolutionInstance(instanceName?: string) {
+    return this.evolutionRequest('logout', { instanceName });
+  }
+
+  async sendEvolutionText(data: { instanceName?: string; number: string; text: string }) {
+    return this.evolutionRequest('sendText', data);
+  }
+
   // Admin
   async getSystemStats() {
     return { stats: {} };

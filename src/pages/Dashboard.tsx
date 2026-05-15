@@ -4,7 +4,8 @@ import {
   Home, PhoneIncoming, Bot, Users, Settings, LogOut, Menu, X, Phone,
   BarChart3, TrendingUp, Clock, Search, Plus, MoreVertical, ArrowUpRight,
   ArrowDownRight, Eye, Download, ChevronLeft, ChevronRight,
-  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play, Megaphone, Square, Trash2, Music
+  AlertCircle, Zap, CheckCircle2, Loader, PlayCircle, Play, Megaphone, Square, Trash2, Music,
+  Copy, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PremiumAudioPlayer } from "@/components/PremiumAudioPlayer";
@@ -64,6 +65,10 @@ export default function Dashboard() {
   const [campaignResult, setCampaignResult] = useState<any>(null);
   const [playingTtsVoice, setPlayingTtsVoice] = useState<string | null>(null);
   const campaignAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Context Builder State — dynamic key-value pairs injected into outbound AI prompt
+  const [campaignContextRows, setCampaignContextRows] = useState<{key: string; value: string}[]>([]);
+  const [showContextBuilder, setShowContextBuilder] = useState(false);
 
   // API Key State
   const [apiKey, setApiKey] = useState<string>(localStorage.getItem("api_secret_key") || "");
@@ -166,6 +171,16 @@ export default function Dashboard() {
     if (campaignMode === 'ai') {
       // agent_id: UUID of the outbound AI agent to use
       basePayload.agent_id = campaignAgent || null;
+      // context: flat key-value object injected into the AI system prompt
+      const contextObj: Record<string, string> = {};
+      campaignContextRows.forEach(row => {
+        const k = row.key.trim();
+        const v = row.value.trim();
+        if (k && v) contextObj[k] = v;
+      });
+      if (Object.keys(contextObj).length > 0) {
+        basePayload.context = contextObj;
+      }
     }
 
     setIsLaunchingCampaign(true);
@@ -180,6 +195,8 @@ export default function Dashboard() {
       setCampaignAgent("");
       setCampaignText("");
       setCampaignCloudUrl("");
+      setCampaignContextRows([]);
+      setShowContextBuilder(false);
       if (campaignAudioRef.current) {
         campaignAudioRef.current.pause();
         campaignAudioRef.current = null;
@@ -663,6 +680,23 @@ export default function Dashboard() {
                       <p className="text-sm text-muted-foreground">
                         {agent.voice || "Kore"} Voice • {agent.is_deployed ? 'Deployed' : 'Draft'}
                       </p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded select-all">
+                          ID: {agent.id}
+                        </span>
+                        <button
+                          type="button"
+                          title="Copy Agent ID"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(agent.id);
+                            toast.success("Agent ID copied!");
+                          }}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -994,22 +1028,110 @@ export default function Dashboard() {
 
             {/* === AI Calling Mode === */}
             {campaignMode === 'ai' && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">AI Agent</label>
-                <Select value={campaignAgent} onValueChange={setCampaignAgent}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an agent..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents && agents.length > 0 ? agents.map((a: any) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-                    )) : (
-                      <SelectItem value="__none" disabled>No agents available</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Agent handles live 2-way conversation using Gemini AI</p>
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">AI Agent</label>
+                  <Select value={campaignAgent} onValueChange={setCampaignAgent}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose an agent..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents && agents.length > 0 ? agents.map((a: any) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {a.name}
+                          <span className="ml-2 text-[10px] font-mono text-muted-foreground">({String(a.id).slice(0, 8)}…)</span>
+                        </SelectItem>
+                      )) : (
+                        <SelectItem value="__none" disabled>No agents available</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Agent handles live 2-way conversation using Gemini AI</p>
+                </div>
+
+                {/* === Context Builder === */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      Call Context
+                      <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!showContextBuilder) {
+                          setShowContextBuilder(true);
+                          if (campaignContextRows.length === 0) {
+                            setCampaignContextRows([{ key: '', value: '' }]);
+                          }
+                        } else {
+                          setShowContextBuilder(false);
+                        }
+                      }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {showContextBuilder ? 'Hide' : 'Add Context'}
+                    </button>
+                  </div>
+
+                  {showContextBuilder && (
+                    <div className="space-y-2 p-3 rounded-lg border border-dashed border-primary/30 bg-primary/5">
+                      <p className="text-[11px] text-muted-foreground">
+                        Add key-value pairs that will be injected into the AI prompt. E.g. <code className="bg-muted px-1 rounded">customer_name</code> → <code className="bg-muted px-1 rounded">Ramesh Kumar</code>
+                      </p>
+                      {campaignContextRows.map((row, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            placeholder="Key (e.g. customer_name)"
+                            value={row.key}
+                            onChange={(e) => {
+                              const updated = [...campaignContextRows];
+                              updated[idx] = { ...updated[idx], key: e.target.value };
+                              setCampaignContextRows(updated);
+                            }}
+                            className="flex-1 h-8 text-xs"
+                          />
+                          <Input
+                            placeholder="Value (e.g. Ramesh Kumar)"
+                            value={row.value}
+                            onChange={(e) => {
+                              const updated = [...campaignContextRows];
+                              updated[idx] = { ...updated[idx], value: e.target.value };
+                              setCampaignContextRows(updated);
+                            }}
+                            className="flex-1 h-8 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = campaignContextRows.filter((_, i) => i !== idx);
+                              setCampaignContextRows(updated);
+                              if (updated.length === 0) setShowContextBuilder(false);
+                            }}
+                            className="text-destructive hover:text-destructive/80 transition-colors p-1"
+                            title="Remove row"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setCampaignContextRows([...campaignContextRows, { key: '', value: '' }])}
+                        className="flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                      >
+                        <Plus className="h-3 w-3" /> Add another field
+                      </button>
+                      {campaignContextRows.filter(r => r.key.trim() && r.value.trim()).length > 0 && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          ⚠️ Same context is sent to all numbers in this campaign. For per-person context, launch separate campaigns.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             {/* === TTS Mode === */}
